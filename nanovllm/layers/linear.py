@@ -77,6 +77,30 @@ class ColumnParallelLinear(LinearBase):
         return F.linear(x, self.weight, self.bias)
 
 
+class MergedColumnParallelLinear(ColumnParallelLinear):
+
+    def __init__(
+        self,
+        input_size: int,
+        output_size: list[int],
+        bias: bool = False
+    ) -> None | AssertionError:
+        self.output_sizes = output_size
+        super().__init__(input_size, sum(output_size), bias)
+
+    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: int) -> None:
+        param_data = param.data
+        assert loaded_shard_id in [0,1]
+        shard_size = divide(self.output_sizes[loaded_shard_id], self.tp_size)
+        shard_offset = divide(sum(self.output_sizes[:loaded_shard_id]), self.tp_size)
+        param_data = param_data.narrow(self.tp_dim, shard_offset, shard_size)
+        loaded_weight = loaded_weight.chunk(self.tp_size, self.tp_dim)[self.tp_rank]
+        param_data.copy_(loaded_weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor :
+        return F.linear(x, self.weight, self.bias)
+
+
 class QKVParallelLinear(ColumnParallelLinear):
 
     def __init__(
