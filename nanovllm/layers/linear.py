@@ -116,3 +116,32 @@ class QKVParallelLinear(ColumnParallelLinear):
         param_data = param_data.narrow(self.tp_dim, shard_offset, shard_size)
         param_data.copy_(loaded_weight)
 
+
+class RowParallelLinear(LinearBase):
+
+    def __init__(
+        self, 
+        input_size: int,
+        ouput_size: int,
+        bias: bool = False
+    ) -> None :
+        tp_size = dist.get_world_size()
+        super().__init__(divide(input_size, tp_size), ouput_size, bias, 1)
+
+
+    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor) -> None :
+        param_data = param.data
+        if param_data.ndim == 1:
+            param_data.copy_(loaded_weight)
+            return
+        shard_size = param_data.size(self.tp_dim)
+        start_idx = self.tp_rank * shard_size
+        loaded_weight = loaded_weight.chunk(self.tp_size, self.tp_dim)[self.tp_rank]
+        param_data.copy_(loaded_weight)
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor :
+        y = F.linear(x, self.weight, self.bias if self.tp_rank == 0 else None)
+        if self.tp_size > 1:
+            dist.all_reduce(y)
+        return y
