@@ -53,3 +53,26 @@ class ReplicatedLinear(LinearBase):
         return F.linear(x, self.weight, self.bias)
 
 
+class ColumnParallelLinear(LinearBase):
+
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        bias: bool = False
+    ) -> None :
+        tp_size = dist.get_world_size()
+        super().__init__(input_size, divide(output_size, tp_size), bias, 0)
+
+
+    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor) -> None:
+        param_data = param.data
+        shard_size = param_data.size(self.tp_dim)
+        start_idx = self.tp_rank * shard_size
+        loaded_weight = loaded_weight.narrow(self.tp_dim, start_idx, shard_size)
+        param_data.copy_(loaded_weight)
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.linear(x, self.weight, self.bias)
+
