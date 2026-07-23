@@ -33,3 +33,23 @@ class LinearBase(nn.Module):
     def forward(self, x: torch.Tensor) -> NotImplementedError:
         raise NotImplementedError
 
+
+class ReplicatedLinear(LinearBase):
+
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        bias: bool = False
+    ) -> None :
+        super().__init__(input_size, output_size, bias) 
+
+
+    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor) -> None:
+        param.data.copy_(loaded_weight)
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor :
+        return F.linear(x, self.weight, self.bias)
+
+
