@@ -76,3 +76,43 @@ class ColumnParallelLinear(LinearBase):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.linear(x, self.weight, self.bias)
 
+
+class QKVParallelLinear(ColumnParallelLinear):
+
+    def __init__(
+        self,
+        hidden_size: int,
+        head_size: int,
+        num_heads: int,
+        num_kv_heads: int | None = None,
+        bias: bool = False
+    ) -> None | AssertionError:
+
+        tp_size = dist.get_world_size()
+        num_kv_heads = num_kv_heads or num_heads
+        total_heads = num_heads + 2 * num_kv_heads
+        assert total_heads % self.tp_size == 0
+        self.head_size = head_size
+        self.q_heads_per_partition = divide(num_heads, tp_size)
+        self.kv_heads_per_partition = divide(num_kv_heads, tp_size)
+        output_size = total_heads * head_size
+        super().__init__(hidden_size, output_size, bias)
+
+
+    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: str) -> None:
+        param_data = param.data
+        assert loaded_shard_id in ["q", "k", "v"]
+        if(loaded_shard_id == "q"):
+            shard_size = self.q_heads_per_partition * self.head_size
+            shard_offset = 0
+        elif loaded_shard_id == "k":
+            shard_size = self.kv_heads_per_partition * self.head_size 
+            shard_offset = self.q_heads_per_partition * self.head_size
+        else:
+            shard_size = self.kv_heads_per_partition * self.head_size 
+            shard_offset = (self.q_heads_per_partition + self.kv_heads_per_partition) * self.head_size
+
+        loaded_weight = loaded_weight.chunk(self.tp_size, self.tp_dim)[self.tp_rank]
+        param_data = param_data.narrow(self.tp_dim, shard_offset, shard_size)
+        param_data.copy_(loaded_weight)
+
