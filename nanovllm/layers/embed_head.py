@@ -1,9 +1,10 @@
-from transformers import AutoTokenizer, AutoConfig
-import os
+# from transformers import AutoTokenizer, AutoConfig
+# import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as f
+import torch.nn.functional as F
 import torch.distributed as dist 
+from nanovllm.utils.context import get_context
 
 class VocabParallelEmbedding(nn.Module):
     def __init__(
@@ -34,20 +35,49 @@ class VocabParallelEmbedding(nn.Module):
             mask = (x >= self.vocab_start_idx) & (x < self.vocab_end_idx)
             x = mask * (x - self.vocab_start_idx)
 
-        y = f.embedding(x, self.weight)
+        y = F.embedding(x, self.weight)
         if self.tp_size > 1:
             y = mask.unsqueeze(1) * y
             dist.all_reduce(y)
 
         return y
 
-if __name__ == "__main__":
-    path = os.path.expanduser("~/huggingface/Qwen3-0.6B")
-    tokenizer = AutoTokenizer.from_pretrained(path, use_fast=True)
-    hf_config = AutoConfig.from_pretrained(path)
-    num_embedddings = hf_config.vocab_size
-    embedding_dim = hf_config.hidden_size
-    tokens = tokenizer.encode("hey how are you?")
-    print(tokens)
-    embedding = VocabParallelEmbedding(num_embedddings, embedding_dim)
-    print(embedding(tokens))
+
+class ParallelLMHead(VocabParallelEmbedding):
+
+    def __init__(
+        self,
+        num_embeddings: torch.Tensor,
+        embedding_dim: torch.Tensor,
+        bias: bool = False
+    ) -> None :
+        assert not bias
+        super().__init__(num_embeddings, embedding_dim)
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        context = get_context()
+        if context.is_prefill:
+            idx = context.cu_seqlens_q[1:] - 1
+            x = x[idx].contiguous()
+        logits = F.linear(x, self.weight)
+        if self.tp_size > 1:
+            gathered_tensors = [torch.empty_like(logits) for _ in range(self.tp_size)] if self.tp_rank == 0 else None 
+            dist.gather(logits, gathered_tensors, 0)
+            logits = torch.cat(gathered_tensors, dim=-1) if self.tp_rank == 0 else None
+        return logits
+
+
+
+
+
+# if __name__ == "__main__":
+#     path = os.path.expanduser("~/huggingface/Qwen3-0.6B")
+#     tokenizer = AutoTokenizer.from_pretrained(path, use_fast=True)
+#     hf_config = AutoConfig.from_pretrained(path)
+#     num_embedddings = hf_config.vocab_size
+#     embedding_dim = hf_config.hidden_size
+#     tokens = tokenizer.encode("hey how are you?")
+#     print(tokens)
+#     embedding = VocabParallelEmbedding(num_embedddings, embedding_dim)
+#     print(embedding(tokens))
