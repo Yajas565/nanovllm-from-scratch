@@ -143,3 +143,29 @@ class Qwen3DecoderLayer(nn.Module):
         hidden_states = self.mlp(hidden_states)
         return hidden_states, residual
 
+
+class Qwen3Model(nn.Module):
+
+    def __init__(
+            self,
+            config: Qwen3Config
+    ) -> None:
+        super().__init__()
+        self.embed_tokens = VocabParallelEmbedding(
+            num_embeddings=config.vocab_size,
+            embedding_dim=config.hidden_size
+        )
+
+        self.layers = nn.ModuleList([Qwen3DecoderLayer(config) for _ in range(config.num_hidden_layers)])
+
+        self.norm = RMSNorm(hidden_size=config.hidden_size, eps=config.rms_norm_eps)
+
+
+    def forward(self, input_ids: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.embed_tokens(input_ids)
+        residual = None
+        for layer in self.layers:
+            hidden_states, residual = layer(positions, hidden_states, residual)
+        hidden_states, _ = self.norm(hidden_states, residual)
+        return hidden_states 
+
