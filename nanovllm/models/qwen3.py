@@ -68,3 +68,31 @@ class Qwen3Attention(nn.Module):
         o = self.o_proj(o.flatten(1, -1))
         return o
 
+
+class Qwen3MLP(nn.Module):
+
+    def __init__(
+            self,
+            hidden_size: int,
+            intermediate_size: int,
+            activation_func: str = "silu",
+    ) -> None: 
+        super().__init__()
+        self.gate_up_proj = MergedColumnParallelLinear(
+            hidden_size,
+            [intermediate_size] * 2,
+            bias=False
+        )
+
+        self.down_proj = RowParallelLinear(intermediate_size, hidden_size, bias=False)
+
+        assert activation_func == "silu"
+        self.act_fn = SiluAndMul()
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.gate_up_proj(x)
+        x = self.act_fn(x)
+        x = self.down_proj(x)
+        return x
+
