@@ -96,3 +96,50 @@ class Qwen3MLP(nn.Module):
         x = self.down_proj(x)
         return x
 
+
+class Qwen3DecoderLayer(nn.Module):
+
+    def __init__(
+            self,
+            config: Qwen3Config
+    ) -> None:
+        super().__init__()
+        self.self_attn = Qwen3Attention(
+            num_heads=config.num_attention_heads,
+            num_kv_heads=config.num_key_value_heads,
+            head_size=config.head_dim,
+            hidden_size=config.hidden_size,
+            max_positions=config.max_position_embeddings,
+            rope_theta=config.default_theta,
+            qkv_bias=config.attention_bias,
+            rms_norm_eps=config.rms_norm_eps,
+            rope_parameters=config.rope_parameters
+        )
+
+        self.mlp = Qwen3MLP(
+            hidden_size=config.hidden_size,
+            intermediate_size=config.intermediate_size,
+            activation_func=config.hidden_act
+        )
+
+        self.input_layernorm = RMSNorm(
+            hidden_size=config.hidden_size,
+            eps=config.rms_norm_eps
+        )
+
+        self.post_attention_layernorm = RMSNorm(
+            hidden_size=config.hidden_size,
+            eps=config.rms_norm_eps
+        )
+
+
+    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor, residual: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor | None]:
+        if residual is None:
+            hidden_states, residual = self.input_layernorm(hidden_states), hidden_states
+        else:
+            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states = self.self_attn(positions, hidden_states)
+        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        hidden_states = self.mlp(hidden_states)
+        return hidden_states, residual
+
