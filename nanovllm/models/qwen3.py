@@ -1,0 +1,70 @@
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+from transformers import Qwen3Config
+
+from nanovllm.layers.embed_head import ParallelLMHead, VocabParallelEmbedding
+from nanovllm.layers.activation import SiluAndMul 
+from nanovllm.layers.attention import Attention 
+from nanovllm.layers.layernorm import RMSNorm
+from nanovllm.layers.linear import RowParallelLinear, MergedColumnParallelLinear, QKVParallelLinear
+from nanovllm.layers.rotary_embedding import get_rotary
+
+
+class Qwen3Attention(nn.Module):
+
+    def __init__(
+            self,
+            num_heads: int,
+            num_kv_heads: int | None,
+            hidden_size: int,
+            head_size: int | None = None,
+            max_positions: int = 4096 * 32,
+            rope_theta: float = 10000,
+            qkv_bias: bool = False,
+            rms_norm_eps: float = 1e-6,
+            rope_parameters: dict | None = None
+    ) -> None:
+        super().__init__()
+        tp_size = dist.get_world_size()
+        total_num_heads = num_heads
+        assert total_num_heads % tp_size == 0
+        self.num_heads = total_num_heads // tp_size
+        total_num_kv_heads = num_kv_heads
+        assert total_num_kv_heads % tp_size == 0
+        self.num_kv_heads = total_num_kv_heads // tp_size
+        self.head_size = head_size or (hidden_size // total_num_heads)
+        self.q_size = self.num_heads * self.head_size
+        self.kv_size = self.num_kv_heads * self.head_size
+        self.qkv_bias = qkv_bias
+        softmax_scale = self.head_size ** -0.5
+
+        self.qkv_proj = QKVParallelLinear(hidden_size, self.head_size, total_num_heads, total_num_kv_heads, qkv_bias)
+
+        self.o_proj = RowParallelLinear(total_num_heads * self.head_size, hidden_size, qkv_bias)
+
+        self.attn = Attention(softmax_scale)
+
+        if not qkv_bias:
+            self.q_norm = RMSNorm(self.head_size, rms_norm_eps)
+            self.k_norm = RMSNorm(self.head_size, rms_norm_eps)
+
+        if isinstance(rope_parameters, dict):
+            rope_theta = rope_parameters.get("rope_theta", rope_theta)
+        self.rotary_emb = get_rotary(self.head_size, self.head_size, max_positions, rope_theta)
+
+
+    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor) -> torch.Tensor:
+        qkv = self.qkv_proj(hidden_states)
+        q, k, v = torch.split(qkv, [self.q_size, self.kv_size, self.kv_size], dim=-1)
+        q = q.view(-1, self.num_heads, self.head_size)
+        k = k.view(-1, self.num_kv_heads, self.head_size)
+        v = v.view(-1, self.num_kv_heads, self.head_size)
+        if not self.qkv_bias:
+            q = self.q_norm(q)
+            k = self.q_norm(k)
+        q, k = self.rotary_emb(positions, q, k)
+        o = self.attn(q, k, v)
+        o = self.o_proj(o.flatten(1, -1))
+        return o
+
