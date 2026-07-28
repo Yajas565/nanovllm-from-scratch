@@ -84,7 +84,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         input_size: int,
         output_size: list[int],
         bias: bool = False
-    ) -> None | AssertionError:
+    ) -> None:
         self.output_sizes = output_size
         super().__init__(input_size, sum(output_size), bias)
 
@@ -110,7 +110,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         num_heads: int,
         num_kv_heads: int | None = None,
         bias: bool = False
-    ) -> None | AssertionError:
+    ) -> None :
 
         tp_size = dist.get_world_size()
         num_kv_heads = num_kv_heads or num_heads

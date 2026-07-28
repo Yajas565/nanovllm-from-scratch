@@ -37,27 +37,29 @@ class LLMEngine:
 
 
     def exit(self):
-        pass
+        self.model_runner.call("exit")
+        del self.model_runner
+        for p in self.ps:
+            p.join()
 
 
     def is_finished(self) -> bool:
         return self.scheduler.is_finished()
 
 
-    def add_request(self, prompt: str | list[int], sampling_param: SamplingParams) -> None:
+    def add_request(self, prompt: str | list[int], sampling_params: SamplingParams) -> None:
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
-
-        seq = Sequence(prompt, sampling_param)
-        self.scheduler.append(seq)
+        seq = Sequence(prompt, sampling_params)
+        self.scheduler.add(seq)
 
 
     def step(self) -> tuple[list[tuple[int, int]], int]:
         scheduled_seqs, is_prefill = self.scheduler.schedule()
-        # total_tokens = sum(len(seq) for seq in scheduled_seqs) if is_prefill else -len(scheduled_seqs)
-        # token_ids = self.model_runner.call("run", scheduled_seqs, is_prefill)
-        # self.scheduler.postprocess(scheduled_seqs)
-        # outputs = [(seq.seq_id, seq.completion_token_ids) for seq in scheduled_seqs if seq.is_finished()]
+        total_tokens = sum(seq.num_scheduled_tokens for seq in scheduled_seqs) if is_prefill else -len(scheduled_seqs)
+        token_ids = self.model_runner.call("run", scheduled_seqs, is_prefill)
+        self.scheduler.postprocess(scheduled_seqs, token_ids, is_prefill)
+        outputs = [(seq.seq_id, seq.completion_token_ids) for seq in scheduled_seqs if seq.is_finished()]
         
         return outputs, total_tokens 
 
@@ -70,14 +72,14 @@ class LLMEngine:
         for prompt, sampling_param in zip(prompts, sampling_params):
             self.add_request(prompt, sampling_param)
 
-        pbar = tqdm(total=len(prompts), desc="generating", dynamic_ncols=True, use_tqdm=not tqdm) 
-        Outputs = dict()
+        pbar = tqdm(total=len(prompts), desc="generating", dynamic_ncols=True, disable= not use_tqdm) 
+        outputs = dict()
         prefill_throughput = 0
         decode_throughput = 0
 
         while not self.is_finished():
             t = perf_counter()
-            outputs, total_tokens = self.step()
+            output, total_tokens = self.step()
 
             if total_tokens > 0:
                 prefill_throughput = total_tokens / (perf_counter() - t)
@@ -85,18 +87,17 @@ class LLMEngine:
                 decode_throughput = -total_tokens/ (perf_counter() - t)
 
             pbar.set_postfix({
-                "prefill throughtput" : prefill_throughput,
-                "decode throughput" : decode_throughput
+                "prefill throughtput" : f"{int(prefill_throughput)}tok/s",
+                "decode throughput" : f"{int(decode_throughput)}tok/s"
             })
 
-            for output in outputs:
-                seq_id = output[0]
-                completion_token_ids = output[1]
-                Outputs[seq_id] = completion_token_ids
+            for seq_id, completion_token_ids in output:
+                outputs[seq_id] = completion_token_ids
                 pbar.update(1)
 
-        pbar.clear()
-        outputs = {self.tokenizer.decode(Outputs[seq_id]) for seq_id in sorted(Outputs)}
+        pbar.close()
+        outputs = [outputs[seq_id] for seq_id in sorted(outputs)]
+        outputs = [{"text": self.tokenizer.decode(token_ids), "token_ids": token_ids} for token_ids in outputs]
         return outputs
 
         

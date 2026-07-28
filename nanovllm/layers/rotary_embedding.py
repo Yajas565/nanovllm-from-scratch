@@ -1,4 +1,3 @@
-from numpy import float32
 import torch
 import torch.nn as nn
 from functools import lru_cache
@@ -37,7 +36,7 @@ class RotaryEmbedding(nn.Module):
     @torch.compile
     def forward(
         self,
-        positions: int,
+        positions: torch.Tensor,
         query: torch.Tensor,
         key: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor] :

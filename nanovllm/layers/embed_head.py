@@ -1,5 +1,5 @@
-# from transformers import AutoTokenizer, AutoConfig
-# import os
+from transformers import AutoTokenizer, AutoConfig
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -47,8 +47,8 @@ class ParallelLMHead(VocabParallelEmbedding):
 
     def __init__(
         self,
-        num_embeddings: torch.Tensor,
-        embedding_dim: torch.Tensor,
+        num_embeddings: int,
+        embedding_dim: int,
         bias: bool = False
     ) -> None :
         assert not bias
@@ -71,13 +71,13 @@ class ParallelLMHead(VocabParallelEmbedding):
 
 
 
-# if __name__ == "__main__":
-#     path = os.path.expanduser("~/huggingface/Qwen3-0.6B")
-#     tokenizer = AutoTokenizer.from_pretrained(path, use_fast=True)
-#     hf_config = AutoConfig.from_pretrained(path)
-#     num_embedddings = hf_config.vocab_size
-#     embedding_dim = hf_config.hidden_size
-#     tokens = tokenizer.encode("hey how are you?")
-#     print(tokens)
-#     embedding = VocabParallelEmbedding(num_embedddings, embedding_dim)
-#     print(embedding(tokens))
+if __name__ == "__main__":
+    path = os.path.expanduser("~/huggingface/Qwen3-0.6B")
+    tokenizer = AutoTokenizer.from_pretrained(path, use_fast=True)
+    hf_config = AutoConfig.from_pretrained(path)
+    num_embedddings = hf_config.vocab_size
+    embedding_dim = hf_config.hidden_size
+    tokens = tokenizer.encode("hey how are you?")
+    print(tokens)
+    embedding = VocabParallelEmbedding(num_embedddings, embedding_dim)
+    print(embedding(tokens))

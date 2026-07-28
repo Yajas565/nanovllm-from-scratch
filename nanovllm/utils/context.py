@@ -26,8 +26,8 @@ def set_context(
     cu_seqlens_k: torch.Tensor = None,
     max_seqlen_q: int = 0,
     max_seqlen_k: int = 0,
-    slot_mapping: torch.Tensor = None,
-    block_tables: torch.Tensor = None,
+    slot_mapping: torch.Tensor | None = None,
+    block_tables: torch.Tensor | None = None,
     context_lens: torch.Tensor = None
 ) -> None :
     global _CONTEXT
