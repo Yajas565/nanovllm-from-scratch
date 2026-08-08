@@ -62,7 +62,7 @@ class Qwen3Attention(nn.Module):
         v = v.view(-1, self.num_kv_heads, self.head_size)
         if not self.qkv_bias:
             q = self.q_norm(q)
-            k = self.q_norm(k)
+            k = self.k_norm(k)
         q, k = self.rotary_emb(positions, q, k)
         o = self.attn(q, k, v)
         o = self.o_proj(o.flatten(1, -1))
