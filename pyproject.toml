@@ -14,6 +14,12 @@ dependencies = [
     "xxhash",
 ]
 
+# to install flash-attention first explicitly install the cuda version compatible torch 
+# 1. Install prerequisites first
+# pip install torch packaging setuptools psutil
+
+# 2. Install FlashAttention without build isolation
+# pip install flash-attn --no-build-isolation
 
 
 [tool.setuptools.packages.find]
