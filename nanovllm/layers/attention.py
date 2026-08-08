@@ -34,7 +34,7 @@ def store_kvcache(
     value: torch.Tensor,
     k_cache: torch.Tensor,
     v_cache: torch.Tensor,
-    slot_mapping: torch.Tensor
+    slot_mapping: torch.Tensor,
 ) -> None:
     N, num_heads, head_dim = key.shape
     D = num_heads * head_dim

@@ -59,7 +59,7 @@ class LLMEngine:
         total_tokens = sum(seq.num_scheduled_tokens for seq in scheduled_seqs) if is_prefill else -len(scheduled_seqs)
         token_ids = self.model_runner.call("run", scheduled_seqs, is_prefill)
         self.scheduler.postprocess(scheduled_seqs, token_ids, is_prefill)
-        outputs = [(seq.seq_id, seq.completion_token_ids) for seq in scheduled_seqs if seq.is_finished()]
+        outputs = [(seq.seq_id, seq.completion_token_ids) for seq in scheduled_seqs if seq.is_finished]
         
         return outputs, total_tokens 
 

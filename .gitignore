@@ -3,3 +3,5 @@ test.py
 test.ipynb
 later.md
 __pycache__/
+nano_vllm.egg-info
+build

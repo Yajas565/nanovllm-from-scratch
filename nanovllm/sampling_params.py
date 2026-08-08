@@ -1,7 +1,10 @@
+from dataclasses import dataclass
 
-
+@dataclass(slots=True)
 class SamplingParams:
-    def __init__(self, temperature: float, ignore_eos: bool = False, max_tokens: int = 256) -> None:
-        self.temperature = temperature
-        self.ignore_eos = ignore_eos
-        self.max_tokens = max_tokens
+    temperature: float = 1.0
+    max_tokens: int = 64
+    ignore_eos: bool = False
+
+    def __post_init__(self):
+        assert self.temperature > 1e-10, "greedy sampling is not permitted"

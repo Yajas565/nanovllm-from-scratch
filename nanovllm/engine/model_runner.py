@@ -134,7 +134,7 @@ class ModelRunner:
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
             max_seqlen_q = max(max_seqlen_q, seqlen_q)
             max_seqlen_k = max(max_seqlen_k, seqlen_k)
-            if seq.block_table is None:
+            if not seq.block_table:
                 continue
             start_block = start // seq.block_size
             end_block = (end + seq.block_size - 1) // seq.block_size
@@ -156,7 +156,7 @@ class ModelRunner:
         cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         cu_seqlens_k = torch.tensor(cu_seqlens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        set_context(is_prefill=True, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k, block_tables=block_tables)
+        set_context(is_prefill=True, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k, block_tables=block_tables, slot_mapping=slot_mapping)
         return input_ids, positions
 
 

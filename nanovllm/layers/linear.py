@@ -115,7 +115,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         tp_size = dist.get_world_size()
         num_kv_heads = num_kv_heads or num_heads
         total_heads = num_heads + 2 * num_kv_heads
-        assert total_heads % self.tp_size == 0
+        assert total_heads % tp_size == 0
         self.head_size = head_size
         self.q_heads_per_partition = divide(num_heads, tp_size)
         self.kv_heads_per_partition = divide(num_kv_heads, tp_size)
